@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chess Coordinate Trainer</title>
+  <style>
+    :root {
+      --bg: #0f172a;         /* slate-900 */
+      --panel: #111827;      /* gray-900 */
+      --panel-2: #1f2937;    /* gray-800 */
+      --accent: #60a5fa;     /* blue-400 */
+      --accent-2: #34d399;   /* emerald-400 */
+      --text: #e5e7eb;       /* gray-200 */
+      --muted: #9ca3af;      /* gray-400 */
+      --good: #4ade80;       /* green-400 */
+      --bad: #f87171;        /* red-400 */
+      --square-light: #f0d9b5; /* classic light */
+      --square-dark:  #b58863; /* classic dark */
+      --square-light-alt: #e6edf3; /* alt light */
+      --square-dark-alt:  #7a8da1; /* alt dark */
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1000px 600px at 10% 0%, #111827 0%, #0b1220 55%, #0a0f1a 100%);
+      color: var(--text);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: clamp(1.25rem, 1.5vw + 1rem, 2rem);
+      margin: 0;
+      letter-spacing: 0.2px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 1fr min(72vmin, 640px) 1fr; /* center the board */
+      gap: 16px;
+      width: 100%;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+
+    .left, .right { display: grid; gap: 12px; align-content: start; }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+
+    label { color: var(--muted); font-size: 0.9rem; }
+
+    select, input[type="text"], button, .btn {
+      background: #0b1220;
+      color: var(--text);
+      border: 1px solid #22304a;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+
+    button, .btn { cursor: pointer; }
+
+    button.primary {
+      background: linear-gradient(180deg, #112143 0%, #0e1a36 100%);
+      border-color: #214d9b;
+    }
+
+    button.primary:hover { filter: brightness(1.1); }
+
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .stat {
+      background: #0b1220;
+      border: 1px solid #22304a;
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 2px;
+      min-width: 110px;
+    }
+    .stat .k { color: var(--muted); font-size: 0.75rem; }
+    .stat .v { font-size: 1.1rem; font-weight: 600; }
+
+    /* Board */
+    .board-wrap { display: grid; place-items: center; }
+    .board {
+      width: 100%;
+      aspect-ratio: 1/1;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid #0b1220;
+      position: relative;
+      transition: transform 240ms ease;
+      touch-action: manipulation;
+    }
+
+    .board.flipped { transform: rotate(180deg); }
+
+    .square {
+      position: relative;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(0,0,0,.1);
+      padding: 0;
+      margin: 0;
+      outline: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .square.light { background: var(--square-light); }
+    .square.dark  { background: var(--square-dark); }
+
+    .theme-alt .square.light { background: var(--square-light-alt); }
+    .theme-alt .square.dark  { background: var(--square-dark-alt); }
+
+    .square.correct { box-shadow: inset 0 0 0 4px rgba(52, 211, 153, .9); animation: pop 160ms ease; }
+    .square.wrong { box-shadow: inset 0 0 0 4px rgba(248, 113, 113, .9); }
+    @keyframes pop { from { transform: scale(0.98); } to { transform: scale(1); } }
+
+    .square.highlight-file::after,
+    .square.highlight-rank::after { content: ""; position: absolute; inset: 0; background: rgba(96, 165, 250, .22); pointer-events: none; }
+    .square.highlight-target { outline: 4px dashed rgba(96,165,250,.85); outline-offset: -6px; }
+
+    /* Edge Labels */
+    .label-file, .label-rank {
+      position: absolute;
+      font-size: clamp(10px, 0.9vw, 14px);
+      color: rgba(0,0,0,.7);
+      font-weight: 600;
+      text-shadow: 0 1px 0 rgba(255,255,255,.65);
+      pointer-events: none;
+      letter-spacing: 0.2px;
+    }
+    .label-file.top { top: 6px; right: 8px; }
+    .label-file.bottom { bottom: 6px; right: 8px; }
+    .label-rank.left { top: 6px; left: 8px; }
+    .label-rank.right { bottom: 6px; left: 8px; }
+
+    .labels-hidden .label-file, .labels-hidden .label-rank { display: none; }
+
+    /* Fix label orientation when flipped */
+    .board.flipped .label-file, .board.flipped .label-rank { transform: rotate(180deg); }
+
+    /* Helper legend */
+    .legend {
+      background: #0b1220;
+      border: 1px dashed #22406b;
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
+
+    .target {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.3px;
+    }
+
+    .kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background: #0b1220;
+      border: 1px solid #22304a;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    .footer-note { color: var(--muted); font-size: 0.85rem; }
+
+    /* Responsive tweaks */
+    @media (max-width: 1000px) {
+      .app { grid-template-columns: 1fr; }
+      .left, .right { order: 2; }
+      .board-wrap { order: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chess Coordinate Trainer</h1>
+    <div class="row">
+      <button id="flipBtn" class="btn">Flip board</button>
+      <button id="themeBtn" class="btn">Toggle theme</button>
+      <label class="row" style="gap:6px"><input id="labelsToggle" type="checkbox" checked /> Show edge labels</label>
+    </div>
+  </header>
+
+  <main class="app">
+    <section class="left panel">
+      <div class="controls">
+        <label>Mode</label>
+        <div class="row">
+          <button class="primary" data-mode="click" id="modeClick">Click squares</button>
+          <button data-mode="type" id="modeType">Type coords</button>
+          <button data-mode="timed" id="modeTimed">60s drill</button>
+        </div>
+
+        <div id="clickUI">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <div>Find square <span class="target" id="targetCoord">e4</span></div>
+            <div class="row"><button id="hintBtn" class="btn">Hint</button><button id="skipBtn" class="btn">Skip</button></div>
+          </div>
+        </div>
+
+        <div id="typeUI" style="display:none">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <div>Square highlighted — type its coord</div>
+            <div class="row">
+              <input id="typeInput" type="text" placeholder="e4" maxlength="2" style="width:80px" />
+              <button id="submitType" class="btn">Submit</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="timedUI" style="display:none">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <div>
+              Find <span class="target" id="timedTarget">e4</span>
+            </div>
+            <div class="row">
+              <button id="startDrill" class="primary">Start 60s</button>
+              <button id="stopDrill" class="btn" disabled>Stop</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="legend">
+          Tips: In <b>Click</b> mode, hit the shown square. In <b>Type</b> mode, a square is highlighted—type like <span class="kbd">e4</span> then Enter. Hold on a square to see its file & rank crosshair. Use <b>Flip</b> to view from Black's side.
+        </div>
+
+        <div class="row" style="margin-top:8px; gap:12px; flex-wrap:wrap">
+          <div class="stat"><div class="k">Attempts</div><div class="v" id="statAttempts">0</div></div>
+          <div class="stat"><div class="k">Correct</div><div class="v" id="statCorrect">0</div></div>
+          <div class="stat"><div class="k">Accuracy</div><div class="v" id="statAcc">0%</div></div>
+          <div class="stat"><div class="k">Streak</div><div class="v" id="statStreak">0</div></div>
+          <div class="stat"><div class="k">Best streak</div><div class="v" id="statBest">0</div></div>
+          <div class="stat" id="timedStat" style="display:none"><div class="k">Time left</div><div class="v" id="timeLeft">60s</div></div>
+        </div>
+
+        <div class="row" style="justify-content:space-between; margin-top:6px">
+          <button id="resetStats" class="btn">Reset stats</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="board-wrap panel">
+      <div id="board" class="board" role="grid" aria-label="Chessboard (a1 bottom-left)"></div>
+    </section>
+
+    <section class="right panel">
+      <h3 style="margin-top:0">Keyboard shortcuts</h3>
+      <ul style="margin:0; padding-left:18px; line-height:1.7">
+        <li><span class="kbd">Enter</span> submits in Type mode</li>
+        <li><span class="kbd">H</span> toggles hint crosshair</li>
+        <li><span class="kbd">F</span> flips the board</li>
+        <li><span class="kbd">T</span> toggles theme</li>
+        <li><span class="kbd">S</span> skips target (Click/Timed)</li>
+      </ul>
+
+      <h3>About</h3>
+      <p class="footer-note">Coordinates follow standard algebraic notation with <b>a1</b> dark and “white on right” (h1 is light). This trainer helps you map squares quickly via click drills, type drills, and a 60-second speed round. Progress is stored locally in your browser.</p>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+
+    // ===== Utilities =====
+    const files = ["a","b","c","d","e","f","g","h"]; // left->right with white at bottom
+    function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function randomCoord() { return files[randInt(0,7)] + (randInt(1,8)); }
+    function coordToParts(coord) { return { file: coord[0], rank: coord[1] }; }
+
+    // Local storage helpers
+    const LS = {
+      get(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }},
+      set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+    };
+
+    // ===== DOM refs =====
+    const boardEl = document.getElementById('board');
+    const targetEl = document.getElementById('targetCoord');
+    const timedTargetEl = document.getElementById('timedTarget');
+
+    const attemptsEl = document.getElementById('statAttempts');
+    const correctEl  = document.getElementById('statCorrect');
+    const accEl      = document.getElementById('statAcc');
+    const streakEl   = document.getElementById('statStreak');
+    const bestEl     = document.getElementById('statBest');
+    const timeLeftEl = document.getElementById('timeLeft');
+    const timedStat  = document.getElementById('timedStat');
+
+    const modeButtons = {
+      click: document.getElementById('modeClick'),
+      type:  document.getElementById('modeType'),
+      timed: document.getElementById('modeTimed')
+    };
+
+    const clickUI = document.getElementById('clickUI');
+    const typeUI  = document.getElementById('typeUI');
+    const timedUI = document.getElementById('timedUI');
+
+    const hintBtn = document.getElementById('hintBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const flipBtn = document.getElementById('flipBtn');
+    const themeBtn = document.getElementById('themeBtn');
+    const labelsToggle = document.getElementById('labelsToggle');
+
+    const typeInput = document.getElementById('typeInput');
+    const submitType = document.getElementById('submitType');
+
+    const startDrill = document.getElementById('startDrill');
+    const stopDrill = document.getElementById('stopDrill');
+
+    const resetStatsBtn = document.getElementById('resetStats');
+
+    // ===== State =====
+    const state = {
+      mode: 'click',
+      target: 'e4',
+      typeSquare: null, // HTMLElement highlighted in type mode
+      hoverHelp: true,
+      isFlipped: false,
+      altTheme: false,
+      labelsShown: true,
+      stats: { attempts: 0, correct: 0, streak: 0, best: LS.get('cct_best', 0) || 0 },
+      timed: { running: false, timeLeft: 60, timer: null, score: 0 }
+    };
+
+    // ===== Board generation =====
+    function buildBoard(){
+      boardEl.innerHTML = '';
+      for (let r = 8; r >= 1; r--) { // top row 8 -> bottom row 1
+        for (let f = 0; f < 8; f++) {
+          const file = files[f];
+          const rank = String(r);
+          const sq = document.createElement('button');
+          sq.className = 'square ' + (((f + r) % 2 === 1) ? 'dark' : 'light');
+          sq.dataset.file = file;
+          sq.dataset.rank = rank;
+          sq.dataset.coord = file + rank;
+          sq.setAttribute('aria-label', sq.dataset.coord);
+          sq.setAttribute('role', 'gridcell');
+          sq.tabIndex = -1;
+
+          // Labels (edges only)
+          const showFileTop = r === 8;
+          const showFileBottom = r === 1;
+          const showRankLeft = f === 0;
+          const showRankRight = f === 7;
+
+          if (showFileTop) {
+            const span = document.createElement('span');
+            span.className = 'label-file top';
+            span.textContent = file;
+            sq.appendChild(span);
+          }
+          if (showFileBottom) {
+            const span = document.createElement('span');
+            span.className = 'label-file bottom';
+            span.textContent = file;
+            sq.appendChild(span);
+          }
+          if (showRankLeft) {
+            const span = document.createElement('span');
+            span.className = 'label-rank left';
+            span.textContent = rank;
+            sq.appendChild(span);
+          }
+          if (showRankRight) {
+            const span = document.createElement('span');
+            span.className = 'label-rank right';
+            span.textContent = rank;
+            sq.appendChild(span);
+          }
+
+          // Events
+          sq.addEventListener('click', squareClicked);
+          sq.addEventListener('pointerdown', squarePointerDown);
+          sq.addEventListener('pointerup', clearHoverHighlights);
+          sq.addEventListener('pointerleave', clearHoverHighlights);
+
+          boardEl.appendChild(sq);
+        }
+      }
+      applyLabelVisibility();
+    }
+
+    function getSquareByCoord(coord){
+      return boardEl.querySelector(`[data-coord="${coord}"]`);
+    }
+
+    // ===== Modes =====
+    function setMode(m){
+      state.mode = m;
+      for (const key of Object.keys(modeButtons)){
+        modeButtons[key].classList.toggle('primary', key === m);
+      }
+      clickUI.style.display = m === 'click' ? '' : 'none';
+      typeUI.style.display  = m === 'type'  ? '' : 'none';
+      timedUI.style.display = m === 'timed' ? '' : 'none';
+      timedStat.style.display = m === 'timed' ? '' : 'none';
+
+      clearBoardHighlights();
+
+      if (m === 'click') {
+        state.target = randomCoord();
+        targetEl.textContent = state.target;
+      }
+      if (m === 'type') {
+        chooseTypeSquare();
+        typeInput.value = '';
+        typeInput.focus({ preventScroll: true });
+      }
+      if (m === 'timed') {
+        resetTimed();
+      }
+    }
+
+    // ===== Interactions =====
+    function squareClicked(e){
+      const sq = e.currentTarget;
+      const coord = sq.dataset.coord;
+
+      if (state.mode === 'click') {
+        const correct = coord === state.target;
+        markSquare(sq, correct);
+        registerAttempt(correct);
+        if (correct) {
+          nextClickTarget();
+        }
+      }
+      else if (state.mode === 'type') {
+        // Allow clicking the highlighted one as a shortcut
+        const correct = sq === state.typeSquare;
+        markSquare(sq, correct);
+        registerAttempt(correct);
+        if (correct) { chooseTypeSquare(); typeInput.value = ''; }
+      }
+      else if (state.mode === 'timed' && state.timed.running) {
+        const correct = coord === state.target;
+        markSquare(sq, correct);
+        if (correct) {
+          state.timed.score++;
+          nextTimedTarget();
+        }
+      }
+    }
+
+    function markSquare(sq, correct){
+      sq.classList.remove('correct','wrong');
+      void sq.offsetWidth; // reflow to retrigger animation
+      sq.classList.add(correct ? 'correct' : 'wrong');
+      setTimeout(() => { sq.classList.remove('correct','wrong'); }, 360);
+    }
+
+    function nextClickTarget(){
+      state.target = randomCoord();
+      targetEl.textContent = state.target;
+      if (hintActive) { showHintCrosshair(); }
+    }
+
+    function chooseTypeSquare(){
+      clearBoardHighlights();
+      const coord = randomCoord();
+      state.typeSquare = getSquareByCoord(coord);
+      state.typeSquare.classList.add('highlight-target');
+    }
+
+    function handleTypeSubmit(){
+      const val = typeInput.value.trim().toLowerCase();
+      if (!/^([a-h][1-8])$/.test(val)) return;
+      const correct = getSquareByCoord(val) === state.typeSquare;
+      if (correct) {
+        registerAttempt(true);
+        chooseTypeSquare();
+        typeInput.value = '';
+      } else {
+        registerAttempt(false);
+      }
+    }
+
+    // Timed mode
+    function resetTimed(){
+      state.timed.running = false;
+      state.timed.timeLeft = 60;
+      state.timed.score = 0;
+      timeLeftEl.textContent = '60s';
+      startDrill.disabled = false;
+      stopDrill.disabled = true;
+      nextTimedTarget();
+    }
+
+    function nextTimedTarget(){
+      state.target = randomCoord();
+      timedTargetEl.textContent = state.target;
+      if (hintActive) { showHintCrosshair(); }
+    }
+
+    function startTimed(){
+      if (state.timed.running) return;
+      state.timed.running = true;
+      startDrill.disabled = true;
+      stopDrill.disabled = false;
+
+      const tick = () => {
+        if (!state.timed.running) return;
+        state.timed.timeLeft--;
+        timeLeftEl.textContent = state.timed.timeLeft + 's';
+        if (state.timed.timeLeft <= 0){
+          state.timed.running = false;
+          stopDrill.disabled = true;
+          startDrill.disabled = false;
+          alert(`Time! Score: ${state.timed.score}`);
+          resetTimed();
+          return;
+        }
+        state.timed.timer = setTimeout(tick, 1000);
+      };
+      state.timed.timer = setTimeout(tick, 1000);
+    }
+
+    function stopTimed(){
+      state.timed.running = false;
+      clearTimeout(state.timed.timer);
+      stopDrill.disabled = true;
+      startDrill.disabled = false;
+    }
+
+    // Attempts & stats
+    function registerAttempt(correct){
+      state.stats.attempts++;
+      if (correct) {
+        state.stats.correct++;
+        state.stats.streak++;
+        if (state.stats.streak > state.stats.best) {
+          state.stats.best = state.stats.streak;
+          LS.set('cct_best', state.stats.best);
+        }
+      } else {
+        state.stats.streak = 0;
+      }
+      renderStats();
+    }
+
+    function renderStats(){
+      const {attempts, correct, streak, best} = state.stats;
+      const acc = attempts ? Math.round((correct / attempts) * 100) : 0;
+      attemptsEl.textContent = attempts;
+      correctEl.textContent = correct;
+      accEl.textContent = acc + '%';
+      streakEl.textContent = streak;
+      bestEl.textContent = best;
+    }
+
+    // Hover crosshair (press & hold)
+    let hoverTimeout = null;
+    function squarePointerDown(e){
+      if (!state.hoverHelp) return;
+      const sq = e.currentTarget;
+      hoverTimeout = setTimeout(() => highlightCrosshairFor(sq), 200);
+    }
+    function clearHoverHighlights(){
+      clearTimeout(hoverTimeout);
+      boardEl.querySelectorAll('.highlight-file, .highlight-rank').forEach(el => el.classList.remove('highlight-file','highlight-rank'));
+    }
+
+    function highlightCrosshairFor(sq){
+      const { file, rank } = sq.dataset;
+      boardEl.querySelectorAll(`.square[data-file="${file}"]`).forEach(el => el.classList.add('highlight-file'));
+      boardEl.querySelectorAll(`.square[data-rank="${rank}"]`).forEach(el => el.classList.add('highlight-rank'));
+    }
+
+    // Hint crosshair for target
+    let hintActive = false;
+    function showHintCrosshair(){
+      clearBoardHighlights();
+      const { file, rank } = coordToParts(state.target);
+      boardEl.querySelectorAll(`.square[data-file="${file}"]`).forEach(el => el.classList.add('highlight-file'));
+      boardEl.querySelectorAll(`.square[data-rank="${rank}"]`).forEach(el => el.classList.add('highlight-rank'));
+    }
+    function clearBoardHighlights(){
+      boardEl.querySelectorAll('.highlight-file, .highlight-rank, .highlight-target').forEach(el => el.classList.remove('highlight-file','highlight-rank','highlight-target'));
+    }
+
+    // Toggles
+    function flipBoard(){
+      state.isFlipped = !state.isFlipped;
+      boardEl.classList.toggle('flipped', state.isFlipped);
+    }
+    function toggleTheme(){
+      state.altTheme = !state.altTheme;
+      document.body.classList.toggle('theme-alt', state.altTheme);
+    }
+    function applyLabelVisibility(){
+      boardEl.classList.toggle('labels-hidden', !state.labelsShown);
+    }
+
+    // ===== Wiring =====
+    hintBtn.addEventListener('click', () => {
+      hintActive = !hintActive;
+      if (hintActive) showHintCrosshair(); else clearBoardHighlights();
+    });
+    skipBtn.addEventListener('click', () => {
+      if (state.mode === 'click') nextClickTarget();
+      if (state.mode === 'timed') nextTimedTarget();
+    });
+
+    flipBtn.addEventListener('click', flipBoard);
+    themeBtn.addEventListener('click', toggleTheme);
+    labelsToggle.addEventListener('change', (e) => { state.labelsShown = e.target.checked; applyLabelVisibility(); });
+
+    submitType.addEventListener('click', handleTypeSubmit);
+    typeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleTypeSubmit(); });
+
+    startDrill.addEventListener('click', startTimed);
+    stopDrill.addEventListener('click', stopTimed);
+
+    resetStatsBtn.addEventListener('click', () => { state.stats = { attempts: 0, correct: 0, streak: 0, best: state.stats.best }; renderStats(); });
+
+    // Mode buttons
+    for (const [m, btn] of Object.entries(modeButtons)){
+      btn.addEventListener('click', () => setMode(m));
+    }
+
+    // Key shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const k = e.key.toLowerCase();
+      if (k === 'h') { hintBtn.click(); }
+      if (k === 'f') { flipBtn.click(); }
+      if (k === 't') { themeBtn.click(); }
+      if (k === 's') { skipBtn.click(); }
+    });
+
+    // ===== Init =====
+    buildBoard();
+    setMode('click');
+    renderStats();
+  </script>
+</body>
+</html>
